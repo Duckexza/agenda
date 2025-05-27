@@ -193,30 +193,32 @@
 			}
 			
 			async function salvarAgenda() {
-			const twitch = getInputValue('twitch');
-			const codigo = getInputValue('codigo');
-			if (!twitch || !codigo) return alert("Informe o twitch e o código.");
-			
-			mostrarLoading("Salvando agenda...");
-			try {
-				const agenda = {};
-				document.querySelectorAll('td').forEach(td => {
-				const dia = td.dataset.dia;
-				const hora = td.dataset.hora;
-				let status = 'vermelho';
-				if (td.classList.contains('verde')) status = 'verde';
-				if (!agenda[dia]) agenda[dia] = {};
-				agenda[dia][hora] = status;
-				});
-				await db.collection("agendas").doc(twitch).set(agenda);
-				alert("Agenda salva com sucesso!");
-			} catch (e) {
-				console.error("Erro ao salvar agenda:", e);
-				alert("Erro ao salvar agenda.");
-			} finally {
-				esconderLoading();
-			}
-			}
+  const twitch = getInputValue('twitch');
+  const codigo = getInputValue('codigo');
+  if (!twitch || !codigo) return alert("Informe o twitch e o código.");
+
+  mostrarLoading("Salvando agenda...");
+  try {
+    const agenda = { codigo }; // Inclui o código aqui
+
+    document.querySelectorAll('td').forEach(td => {
+      const dia = td.dataset.dia;
+      const hora = td.dataset.hora;
+      let status = 'vermelho';
+      if (td.classList.contains('verde')) status = 'verde';
+      if (!agenda[dia]) agenda[dia] = {};
+      agenda[dia][hora] = status;
+    });
+
+    await db.collection("agendas").doc(twitch).set(agenda);
+    alert("Agenda salva com sucesso!");
+  } catch (e) {
+    console.error("Erro ao salvar agenda:", e);
+    alert("Erro ao salvar agenda.");
+  } finally {
+    esconderLoading();
+  }
+}
 			
 			async function atualizarTelefone() {
 			const twitch = getInputValue('twitch');
