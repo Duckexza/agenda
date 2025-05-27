@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Agenda com Firestore - Reservas</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+    h2 { margin: 0; text-align: center; }
+    .table-wrapper { overflow-x: auto; width: 100%; max-width: 1000px; }
+    table { width: 100%; border-collapse: collapse; border: 1px solid black; text-align: center; table-layout: fixed; word-wrap: break-word; }
+    th, td { border: 1px solid black; padding: 5px; min-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+    select { width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; background-color: #f9f9f9; font-size: 14px; cursor: pointer; }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 6px;
+      border: none;
+      background-color: #4CAF50;
+      color: white;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <h2>Agenda com Firestore - Reservas</h2>
+  <div class="table-wrapper">
+    <table id="agenda" border="1">
+      <thead>
+        <tr>
+          <th>Hora</th>
+          <th>Seg</th>
+          <th>Ter</th>
+          <th>Qua</th>
+          <th>Qui</th>
+          <th>Sex</th>
+          <th>Sáb</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+	<div class="botoes-container">
+	<button id="btnResetar" class="reset">Resetar Reservas</button>
+	<button id="btnSalvar">Salvar Reservas</button>
+
+</div>
+<div id="loading" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.7); color:#fff; padding:20px 30px; border-radius:10px; font-weight:bold; z-index:9999;">Processando...
+		</div>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyC8muc6OX32PuZNzklRIppbhBVwaOS80L0",
+      authDomain: "gods-f165b.firebaseapp.com",
+      projectId: "gods-f165b",
+      storageBucket: "gods-f165b.firebasestorage.app",
+      messagingSenderId: "48248280273",
+      appId: "1:48248280273:web:29f140663292421ac2a1f0"
+    };
+function mostrarLoading(msg = "Processando...") {
+  const loading = document.getElementById('loading');
+  loading.textContent = msg;
+  loading.style.display = 'block';
+}
+
+function esconderLoading() {
+  document.getElementById('loading').style.display = 'none';
+}
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+    const horas = Array.from({ length: 14 }, (_, i) => `${10 + i}:00`);
+
+    // Guarda alterações pendentes antes de salvar no Firestore
+    const alteracoesPendentes = {};
+
+    // Gera a tabela
+    function gerarTabela() {
+      const tbody = document.querySelector("#agenda tbody");
+      tbody.innerHTML = "";
+      horas.forEach(hora => {
+        const tr = document.createElement("tr");
+        const th = document.createElement("th");
+        th.textContent = hora;
+        tr.appendChild(th);
+
+        dias.forEach(dia => {
+          const td = document.createElement("td");
+          td.dataset.dia = dia;
+          td.dataset.hora = hora;
+          tr.appendChild(td);
+        });
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Carregar dados das pessoas (agenda) e reservas
+    async function carregarAgendaEReservas() {
+      try {
+        // Carregar agendas das pessoas
+        const agendasSnap = await db.collection("agendas").get();
+        const pessoas = {};
+        agendasSnap.forEach(doc => {
+          pessoas[doc.id] = doc.data();
+        });
+
+        // Carregar reservas existentes
+        const reservasSnap = await db.collection("reservas").get();
+        const reservas = {};
+        reservasSnap.forEach(doc => {
+          reservas[doc.id] = doc.data(); // id: ex "Seg_10:00"
+        });
+
+        // Para cada célula, montar o select com opções e pré-selecionar reserva
+        document.querySelectorAll("td[data-dia][data-hora]").forEach(td => {
+          const dia = td.dataset.dia;
+          const hora = td.dataset.hora;
+          const reservaId = `${dia}_${hora}`;
+
+          td.innerHTML = "";
+
+          const select = document.createElement("select");
+
+          // Opção "nenhuma" para cancelar reserva
+          const optionVazia = document.createElement("option");
+          optionVazia.value = "";
+          optionVazia.textContent = "--";
+          select.appendChild(optionVazia);
+
+          // Adiciona pessoas disponíveis naquele dia/hora
+          Object.entries(pessoas).forEach(([nome, agenda]) => {
+            if (agenda[dia] && agenda[dia][hora] === "verde") {
+              const option = document.createElement("option");
+              option.value = nome;
+              option.textContent = nome;
+              select.appendChild(option);
+            }
+          });
+
+          // Seleciona a reserva atual se existir
+          if (reservas[reservaId]) {
+            select.value = reservas[reservaId].nome || "";
+          } else {
+            select.value = "";
+          }
+
+          // Se já tiver alteração pendente para essa célula, mostrar alteração local
+          if (alteracoesPendentes[reservaId]) {
+            select.value = alteracoesPendentes[reservaId].nome || "";
+          }
+
+          // Evento para registrar alteração localmente, mas sem salvar ainda
+          select.addEventListener("change", (e) => {
+            const nomeSelecionado = e.target.value;
+            alteracoesPendentes[reservaId] = {
+              nome: nomeSelecionado, // "" para cancelar reserva
+              dia,
+              hora,
+            };
+          });
+
+          td.appendChild(select);
+        });
+
+      } catch (error) {
+        console.error("Erro ao carregar agenda e reservas:", error);
+        alert("Erro ao carregar dados. Veja o console.");
+      }
+    }
+	
+    // Função para salvar todas alterações pendentes no Firestore
+    async function salvarAlteracoes() {
+      const chaves = Object.keys(alteracoesPendentes);
+      if (chaves.length === 0) {
+        alert("Nenhuma alteração para salvar.");
+        return;
+      }
+		 mostrarLoading("Salvando reservas...");
+      try {
+        for (const reservaId of chaves) {
+          const alteracao = alteracoesPendentes[reservaId];
+          if (!alteracao.nome) {
+            // Apagar reserva
+            await db.collection("reservas").doc(reservaId).delete();
+          } else {
+            // Salvar ou atualizar reserva
+            await db.collection("reservas").doc(reservaId).set({
+              nome: alteracao.nome,
+              dia: alteracao.dia,
+              hora: alteracao.hora,
+              timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+        }
+        alert("Reservas salvas com sucesso!");
+        // Limpa pendências e recarrega tabela para refletir os dados salvos
+        Object.keys(alteracoesPendentes).forEach(key => delete alteracoesPendentes[key]);
+        carregarAgendaEReservas();
+      } catch (err) {
+        console.error("Erro ao salvar reservas:", err);
+        alert("Erro ao salvar reservas. Tente novamente.");
+      } finally {
+    esconderLoading();
+  }
+    }
+
+    gerarTabela();
+    carregarAgendaEReservas();
+
+    // Botão salvar
+    document.getElementById("btnSalvar").addEventListener("click", async () => {
+  try {
+    const doc = await db.collection("admin").doc("gods").get();
+    if (!doc.exists) {
+      alert("Erro: documento de autenticação não encontrado.");
+      return;
+    }
+
+    const senhaCorreta = doc.data().senha;
+    let senhaUsuario;
+
+    // Repete até o usuário acertar a senha ou cancelar
+    while (true) {
+      senhaUsuario = prompt("Digite a senha para salvar as reservas:");
+      if (senhaUsuario === null) {
+        alert("Operação cancelada.");
+        return;
+      }
+
+      if (senhaUsuario === senhaCorreta) {
+        await salvarAlteracoes();
+        break;
+      } else {
+        alert("Senha incorreta. Tente novamente.");
+      }
+    }
+
+  } catch (error) {
+    console.error("Erro ao verificar senha:", error);
+    alert("Erro ao verificar senha. Veja o console.");
+  }
+});
+
+	document.getElementById("btnResetar").addEventListener("click", async () => {
+  if (!confirm("Deseja realmente cancelar todas as reservas visíveis na tela?")) return;
+mostrarLoading("Salvando reservas...");
+  const promises = [];
+
+  document.querySelectorAll("td[data-dia][data-hora] select").forEach(select => {
+    const td = select.parentElement;
+    const dia = td.dataset.dia;
+    const hora = td.dataset.hora;
+    const reservaId = `${dia}_${hora}`;
+
+    // Se houver alguma reserva, apagar no Firestore
+    if (select.value) {
+      promises.push(db.collection("reservas").doc(reservaId).delete());
+    }
+
+    // Limpa a seleção no visual
+    select.value = "";
+
+    // Limpa alteração pendente, se existir
+    delete alteracoesPendentes[reservaId];
+  });
+
+  try {
+    await Promise.all(promises);
+    alert("Todas as reservas foram canceladas com sucesso.");
+  } catch (error) {
+    console.error("Erro ao resetar reservas:", error);
+    alert("Erro ao cancelar as reservas. Veja o console.");
+  } finally {
+    esconderLoading();
+  }
+});
+
+async function exportarDiasComMarcaDagua() {
+  const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  
+  for (const dia of dias) {
+    const colunas = document.querySelectorAll(`td[data-dia='${dia}']`);
+    if (!colunas.length) continue;
+
+    // Cria tabela temporária com cabeçalho
+    const tabelaTemp = document.createElement("table");
+    tabelaTemp.style.borderCollapse = "collapse";
+    tabelaTemp.style.width = "800px";
+    tabelaTemp.style.border = "1px solid black";
+    tabelaTemp.style.fontFamily = "Arial, sans-serif";
+
+    const thead = document.createElement("thead");
+    const trHead = document.createElement("tr");
+    ["Hora", dia].forEach(txt => {
+      const th = document.createElement("th");
+      th.textContent = txt;
+      th.style.border = "1px solid black";
+      th.style.padding = "5px";
+      th.style.fontSize = "14px";
+      trHead.appendChild(th);
+    });
+    thead.appendChild(trHead);
+    tabelaTemp.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+
+    for (let i = 0; i < colunas.length; i++) {
+      const tdOriginal = colunas[i];
+      const hora = tdOriginal.dataset.hora;
+      const select = tdOriginal.querySelector("select");
+      const nome = select?.selectedOptions[0]?.value || "";
+
+      const tr = document.createElement("tr");
+
+      const tdHora = document.createElement("td");
+      tdHora.textContent = hora;
+      tdHora.style.border = "1px solid black";
+      tdHora.style.padding = "5px";
+      tdHora.style.fontSize = "14px";
+
+      const tdNome = document.createElement("td");
+      tdNome.textContent = nome;
+      tdNome.style.border = "1px solid black";
+      tdNome.style.padding = "5px";
+      tdNome.style.fontSize = "14px";
+
+      tr.appendChild(tdHora);
+      tr.appendChild(tdNome);
+      tbody.appendChild(tr);
+    }
+
+    tabelaTemp.appendChild(tbody);
+
+    // Cria container invisível com marca d'água
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "-9999px";
+    container.style.top = "0";
+    container.style.width = "auto";
+    container.style.padding = "40px";
+    container.style.background = "white";
+    container.style.display = "inline-block";
+
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "relative";
+    wrapper.style.display = "inline-block";
+
+    // Marca d’água
+    const marca = document.createElement("div");
+    marca.textContent = "Agenda GODS";
+    marca.style.position = "absolute";
+    marca.style.top = "50%";
+    marca.style.left = "50%";
+    marca.style.transform = "translate(-50%, -50%) rotate(-30deg)";
+    marca.style.fontSize = "60px";
+    marca.style.fontWeight = "bold";
+    marca.style.color = "rgba(200, 200, 200, 0.2)";
+    marca.style.pointerEvents = "none";
+    marca.style.whiteSpace = "nowrap";
+    marca.style.userSelect = "none";
+    marca.style.zIndex = "0";
+
+    tabelaTemp.style.position = "relative";
+    tabelaTemp.style.zIndex = "1";
+
+    wrapper.appendChild(marca);
+    wrapper.appendChild(tabelaTemp);
+    container.appendChild(wrapper);
+    document.body.appendChild(container);
+
+    const canvas = await html2canvas(container);
+    const imgData = canvas.toDataURL("image/jpeg", 1.0);
+    baixarImagem(imgData, `reserva_${dia}.jpg`);
+    document.body.removeChild(container);
+  }
+}
+
+function baixarImagem(dataURL, nomeArquivo) {
+  const a = document.createElement("a");
+  a.href = dataURL;
+  a.download = nomeArquivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// Você pode associar a um botão:
+document.body.insertAdjacentHTML('beforeend', `<button onclick="exportarDiasComMarcaDagua()" style="position:fixed; bottom:20px; right:20px; padding:10px 20px; background:#2196F3; color:white; border:none; border-radius:6px; font-size:16px;">Exportar JPGs</button>`);
+
+  </script>
+</body>
+</html>
