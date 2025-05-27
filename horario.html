@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Agenda Semanal</title>
+		<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+		<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"	/>
+		<style>
+			* { box-sizing: border-box; }
+			body { margin: 0; font-family: Arial, sans-serif; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+			h2 { margin: 0; text-align: center; }
+			.container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; width: 100%; max-width: 900px; }
+			.inputs { display: flex; flex-direction: column; gap: 10px; min-width: 250px; flex: 1; }
+			.inputs label { font-weight: bold; display: flex; flex-direction: column; }
+			.inputs input { padding: 6px; font-size: 1rem; width: 100%; }
+			.actions { display: flex; flex-direction: column; gap: 10px; flex: 1; justify-content: flex-start; min-width: 180px; }
+			.actions button {  padding: 10px; font-size: 1rem; cursor: pointer; }
+			.table-wrapper { overflow-x: auto; width: 100%; max-width: 1000px; }
+			table { width: 100%; max-width: 100%; border-collapse: collapse; border: 1px solid black; text-align: center; table-layout: fixed; word-wrap: break-word; }
+			th, td { border: 1px solid black; padding: 5px; min-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+			td.bloqueado { pointer-events: none; cursor: no-drop; }
+			.verde { background-color: green; color: white; }
+			.vermelho { background-color: white; color: white; }
+			@media (max-width: 600px) { body { padding: 10px; }
+			.inputs input, .actions button { font-size: 0.95rem; padding: 8px; }
+			th, td { min-width: 60px; font-size: 0.85rem; } }
+			.tooltip-container { position: relative; display: inline-block; }
+			.tooltip-container .tooltip-text { visibility: hidden; width: 250px; background-color: #333; color: #fff; text-align: left; border-radius: 5px; padding: 8px; position: absolute; z-index: 1; bottom: 125%; /* posição acima do input */ left: 50%; margin-left: -125px; opacity: 0; transition: opacity 0.3s; font-size: 13px; }
+			.tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+			.tooltip-text::after { content: ""; position: absolute; top: 100%; /* seta abaixo do balão */ left: 50%; margin-left: -5px; border-width: 5px;  border-style: solid; border-color: #333 transparent transparent transparent; }
+		</style>
+	</head>
+	<body>
+		<h2>Agenda Semanal</h2>
+		<div class="container">
+			<div class="inputs">
+				<label>Twitch: <input type="text" id="twitch" oninput="this.value = this.value.toLowerCase()"></label>
+				<label>Código: <input type="password" id="codigo"></label>
+				<label>Telefone atual: <input type="text" id="telefone" disabled></label>
+			</div>
+			<div class="actions">
+				<button onclick="validarLogin()"><i class="fas fa-download"></i>  Carregar Agenda</button>
+				<button onclick="limparAgenda()"><i class="fas fa-eraser"></i>  Limpar Agenda</button>
+				<button onclick="salvarAgenda()"><i class="fas fa-save"></i>  Salvar</button>
+			</div>
+		</div>
+		<div class="table-wrapper">
+			<table id="agenda">
+				<thead>
+				<tr>
+					<th>Hora</th>
+					<th>Seg</th>
+					<th>Ter</th>
+					<th>Qua</th>
+					<th>Qui</th>
+					<th>Sex</th>
+					<th>Sáb</th>
+				</tr>
+				</thead>
+				<tbody></tbody>
+			</table>
+		</div>
+		<div class="container">
+			<div class="inputs">
+				<label>Nova Twitch: <input type="text" id="novaTwitch" oninput="this.value = this.value.toLowerCase()"></label>
+				<div class="tooltip-container">
+					<label>Novo telefone: <input type="text" id="novoTelefone" placeholder="55 11 91234-5678"></label>
+					<div class="tooltip-text">Digite o número com o código do país, DDD e telefone. Ex: 55 11 91234-5678</div>
+				</div>
+			</div>
+			<div class="actions">
+				<button onclick="renomearTwitch()"><i class="fas fa-user-edit"></i>  Renomear Twitch</button>
+				<button onclick="atualizarTelefone()"><i class="fa-solid fa-phone-volume"></i>  Atualizar Telefone</button>
+			</div>
+		</div>
+		<div id="loading" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.7); color:#fff; padding:20px 30px; border-radius:10px; font-weight:bold; z-index:9999;">Processando...
+		</div>
+		<script>
+			const telefoneInput = document.getElementById('novoTelefone');
+			telefoneInput.addEventListener('input', function () {
+				// Remove tudo que não for número
+				this.value = this.value.replace(/\D/g, '');
+			});
+			// Firebase config
+			const firebaseConfig = {
+			apiKey: "AIzaSyC8muc6OX32PuZNzklRIppbhBVwaOS80L0",
+			authDomain: "gods-f165b.firebaseapp.com",
+			projectId: "gods-f165b",
+			storageBucket: "gods-f165b.firebasestorage.app",
+			messagingSenderId: "48248280273",
+			appId: "1:48248280273:web:29f140663292421ac2a1f0"
+			};
+			firebase.initializeApp(firebaseConfig);
+			const db = firebase.firestore();
+			
+			const dias = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+			const tbody = document.querySelector('#agenda tbody');
+			
+			for (let h = 10; h <= 23; h++) {
+			const tr = document.createElement('tr');
+			const th = document.createElement('th');
+			th.textContent = h + ":00";
+			tr.appendChild(th);
+			
+			for (let d = 0; d < dias.length; d++) {
+				const td = document.createElement('td');
+				td.dataset.dia = dias[d];
+				td.dataset.hora = h + ":00";
+				td.classList.add('bloqueado');
+				td.addEventListener('click', () => {
+				if (td.classList.contains('verde')) {
+					td.classList.remove('verde');
+					td.classList.add('vermelho');
+				} else if (td.classList.contains('vermelho')) {
+					td.classList.remove('vermelho');
+					td.classList.add('verde');
+				} else {
+					td.classList.add('verde');
+				}
+				});
+				tr.appendChild(td);
+			}
+			tbody.appendChild(tr);
+			}
+			
+			function mostrarLoading(msg = "Processando...") {
+			const loading = document.getElementById('loading');
+			loading.textContent = msg;
+			loading.style.display = 'block';
+			}
+			
+			function esconderLoading() {
+			document.getElementById('loading').style.display = 'none';
+			}
+			
+			const getInputValue = id => document.getElementById(id).value.trim().toLowerCase();
+			const setInputValue = (id, val) => document.getElementById(id).value = val;
+			const disableInput = (id, state = true) => document.getElementById(id).disabled = state;
+			
+			function limparAgenda() {
+			document.querySelectorAll('td').forEach(td => {
+				td.classList.remove('verde', 'vermelho');
+			});
+			}
+			
+			async function validarLogin() {
+			const twitch = getInputValue('twitch');
+			const codigo = getInputValue('codigo');
+			if (!twitch || !codigo) return alert("Informe o twitch e o código.");
+			
+			mostrarLoading("Validando login...");
+			try {
+				const doc = await db.collection("usuarios").doc(twitch).get();
+				if (!doc.exists || doc.data().codigo !== codigo) return alert("twitch ou código incorretos.");
+			
+				setInputValue('telefone', doc.data().telefone || '');
+				disableInput('twitch');
+				disableInput('codigo');
+				disableInput('telefone');
+				await carregarAgenda(twitch);
+			} catch (e) {
+				console.error("Erro ao validar login:", e);
+				alert("Erro ao validar login.");
+			} finally {
+				esconderLoading();
+			}
+			}
+			
+			async function carregarAgenda(twitch) {
+			mostrarLoading("Carregando agenda...");
+			try {
+				document.querySelectorAll('td').forEach(td => td.classList.remove('bloqueado'));
+				const doc = await db.collection("agendas").doc(twitch).get();
+				if (!doc.exists) return alert("Agenda vazia.");
+			
+				const agenda = doc.data();
+				document.querySelectorAll('td').forEach(td => {
+				td.classList.remove('verde', 'vermelho');
+				const dia = td.dataset.dia;
+				const hora = td.dataset.hora;
+				if (agenda[dia] && agenda[dia][hora]) {
+					td.classList.add(agenda[dia][hora]);
+				}
+				});
+			} catch (e) {
+				console.error("Erro ao carregar agenda:", e);
+				alert("Erro ao carregar agenda.");
+			} finally {
+				esconderLoading();
+			}
+			}
+			
+			async function salvarAgenda() {
+			const twitch = getInputValue('twitch');
+			const codigo = getInputValue('codigo');
+			if (!twitch || !codigo) return alert("Informe o twitch e o código.");
+			
+			mostrarLoading("Salvando agenda...");
+			try {
+				const agenda = {};
+				document.querySelectorAll('td').forEach(td => {
+				const dia = td.dataset.dia;
+				const hora = td.dataset.hora;
+				let status = 'vermelho';
+				if (td.classList.contains('verde')) status = 'verde';
+				if (!agenda[dia]) agenda[dia] = {};
+				agenda[dia][hora] = status;
+				});
+				await db.collection("agendas").doc(twitch).set(agenda);
+				alert("Agenda salva com sucesso!");
+			} catch (e) {
+				console.error("Erro ao salvar agenda:", e);
+				alert("Erro ao salvar agenda.");
+			} finally {
+				esconderLoading();
+			}
+			}
+			
+			async function atualizarTelefone() {
+			const twitch = getInputValue('twitch');
+			const novoTelefone = getInputValue('novoTelefone');
+			const codigo = getInputValue('codigo');
+			
+			if (!twitch || !codigo || !novoTelefone) return alert("Preencha o novo telefone.");
+			
+			mostrarLoading("Atualizando telefone...");
+			try {
+				const doc = await db.collection("usuarios").doc(twitch).get();
+				if (!doc.exists || doc.data().codigo !== codigo) return alert("Código incorreto.");
+			
+				await db.collection("usuarios").doc(twitch).update({ telefone: novoTelefone });
+				setInputValue('telefone', novoTelefone);
+				setInputValue('novoTelefone', '');
+				alert("Telefone atualizado com sucesso!");
+			} catch (e) {
+				console.error("Erro ao atualizar telefone:", e);
+				alert("Erro ao atualizar telefone.");
+			} finally {
+				esconderLoading();
+			}
+			}
+			
+			async function renomearTwitch() {
+			const twitchAntiga = getInputValue('twitch');
+			const novaTwitch = getInputValue('novaTwitch');
+			const codigo = getInputValue('codigo');
+			if (!twitchAntiga || !novaTwitch || !codigo) return alert("Preencha o novo nome da twitch.");
+			
+			mostrarLoading("Renomeando twitch...");
+			try {
+				const docUsuario = await db.collection("usuarios").doc(twitchAntiga).get();
+				if (!docUsuario.exists || docUsuario.data().codigo !== codigo) return alert("twitch ou código incorretos.");
+			
+				const existeNova = await db.collection("usuarios").doc(novaTwitch).get();
+				if (existeNova.exists) return alert("Nome da nova twitch já está em uso.");
+			
+				await db.collection("usuarios").doc(novaTwitch).set(docUsuario.data());
+				const docAgenda = await db.collection("agendas").doc(twitchAntiga).get();
+				if (docAgenda.exists) {
+				await db.collection("agendas").doc(novaTwitch).set(docAgenda.data());
+				}
+				await db.collection("usuarios").doc(twitchAntiga).delete();
+				await db.collection("agendas").doc(twitchAntiga).delete();
+			
+				setInputValue('twitch', novaTwitch);
+				setInputValue('novaTwitch', '');
+				setInputValue('telefone', docUsuario.data().telefone || '');
+				disableInput('telefone', false);
+				await carregarAgenda(novaTwitch);
+				alert("Renomeado com sucesso!");
+			} catch (error) {
+				console.error("Erro ao renomear:", error);
+				alert("Erro ao renomear. Verifique o console.");
+			} finally {
+				esconderLoading();
+			}
+			}
+		</script>
+	</body>
+</html>
