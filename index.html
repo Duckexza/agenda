@@ -162,7 +162,7 @@
 			// Validar login + carregar agenda
 			async function validarLogin() {
 				const twitch = twitchInput.value.trim();
-				if (!twitch) return showAlert("Informe o twitch.");
+				if (!twitch) return showAlert("Informe a twitch.");
 				showLoading("Validando login...");
 				try {
 					const doc = await db.collection("agendas").doc(twitch).get();
@@ -204,7 +204,7 @@
 			// Salvar agenda
 			async function salvarAgenda() {
 				const twitch = twitchInput.value.trim();
-				if (!twitch) return showAlert("Informe o twitch.");
+				if (!twitch) return showAlert("Informe a twitch.");
 				const codigo = await showPrompt("Digite o código de segurança:");
 				if (!codigo) return showAlert("Código é obrigatório.");
 				showLoading("Salvando agenda...");
