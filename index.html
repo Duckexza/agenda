@@ -77,16 +77,18 @@
 			}
 		
 			// Delegate clique na tabela para toggle de classes verde/vermelho
-			tbody.addEventListener("click", e => {
-				if (e.target.tagName === "TD") {
-					let td = e.target;
-					if (td.classList.contains("verde")) {
-					td.classList.replace("verde", "vermelho");
-					} else if (td.classList.contains("vermelho")) {
+			tbody.addEventListener("click", (e) => {
+				const td = e.target;
+				if (td.tagName !== "TD") return;
+				
+				if (td.classList.contains("verde")) {
+					td.classList.remove("verde");
+					td.classList.add("vermelho");
+				} else if (td.classList.contains("vermelho")) {
 					td.classList.remove("vermelho");
-					} else {
 					td.classList.add("verde");
-					}
+				} else {
+					td.classList.add("verde");
 				}
 			});
 		
