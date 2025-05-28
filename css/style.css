@@ -1,156 +1,161 @@
 * {
-      box-sizing: border-box;
-    }
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
-    }
-    h2 {
-      margin: 0;
-      text-align: center;
-    }
-    .container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      justify-content: center;
-      width: 100%;
-      max-width: 900px;
-    }
-    .inputs {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      min-width: 250px;
-      flex: 1;
-    }
-    .inputs label {
-      font-weight: bold;
-      display: flex;
-      flex-direction: column;
-      text-align: center;
-    }
-    .inputs input {
-      padding: 6px;
-      font-size: 1rem;
-      width: 50%;
-      margin: 0 auto;
-      text-align: center;
-    }
-    .actions {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      flex: 1;
-      justify-content: flex-start;
-      min-width: 180px;
-    }
-    .actions button {
-      padding: 10px;
-      font-size: 1rem;
-      cursor: pointer;
-    }
-    .table-wrapper {
-      overflow-x: auto;
-      width: 100%;
-      max-width: 1000px;
-    }
-    table {
-      width: 100%;
-      max-width: 100%;
-      border-collapse: collapse;
-      border: 1px solid black;
-      text-align: center;
-      table-layout: fixed;
-      word-wrap: break-word;
-    }
-    th,
-    td {
-      border: 1px solid black;
-      padding: 5px;
-      min-width: 80px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    td.bloqueado {
-      pointer-events: none;
-      cursor: no-drop;
-    }
-    .verde {
-      background-color: green;
-      color: white;
-    }
-    .vermelho {
-      background-color: white;
-      color: white;
-    }
-    @media (max-width: 600px) {
-      body {
-        padding: 10px;
-      }
-      .inputs input,
-      .actions button {
-        font-size: 0.95rem;
-        padding: 8px;
-      }
-      th,
-      td {
-        min-width: 60px;
-        font-size: 0.85rem;
-      }
-    }
-
-    /* Modais com animação fade */
-    #loading,
-    #custom-prompt,
-    #custom-alert {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.85);
-      color: #fff;
-      padding: 20px 30px;
-      border-radius: 10px;
-      font-weight: bold;
-      z-index: 10000;
-      text-align: center;
-      box-shadow: 0 0 15px rgba(0, 0, 0, 0.4);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s ease;
-      max-width: 90vw;
-      width: 320px;
-      user-select: none;
-    }
-    #loading.show,
-    #custom-prompt.show,
-    #custom-alert.show {
-      opacity: 1;
-      pointer-events: auto;
-      user-select: text;
-    }
-    #custom-prompt input {
-      padding: 8px;
-      font-size: 16px;
-      width: 60%;
-      margin-bottom: 15px;
-      text-align: center;
-      user-select: text;
-    }
-    #custom-prompt button,
-    #custom-alert button {
-      padding: 10px 20px;
-      font-size: 16px;
-      border: none;
-      background-color: #4caf50;
-      color: white;
-      border-radius: 5px;
-      cursor: pointer;
-      user-select: none;
-    }
+	box-sizing: border-box;
+}
+body {
+	margin: 0;
+	font-family: Arial, sans-serif;
+	padding: 20px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 20px;
+}
+h2 {
+	margin: 0;
+	text-align: center;
+}
+.container {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 20px;
+	justify-content: center;
+	width: 100%;
+	max-width: 900px;
+}
+.inputs {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-width: 250px;
+	flex: 1;
+}
+.inputs label {
+	font-weight: bold;
+	display: flex;
+	flex-direction: column;
+	text-align: center;
+}
+.inputs input {
+	padding: 6px;
+	font-size: 1rem;
+	width: 50%;
+	margin: 0 auto;
+	text-align: center;
+}
+.actions {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	flex: 1;
+	justify-content: flex-start;
+	min-width: 180px;
+}
+.actions button {
+	padding: 10px;
+	font-size: 1rem;
+	cursor: pointer;
+}
+.table-wrapper {
+	overflow-x: auto;
+	width: 100%;
+	max-width: 1000px;
+}
+table {
+	width: 100%;
+	max-width: 100%;
+	border-collapse: collapse;
+	border: 1px solid black;
+	text-align: center;
+	table-layout: fixed;
+	word-wrap: break-word;
+}
+th, td {
+	border: 1px solid black;
+	padding: 5px;
+	min-width: 80px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+td.bloqueado {
+	pointer-events: none;
+	cursor: no-drop;
+}
+.verde {
+	background-color: green;
+	color: white;
+}
+.vermelho {
+	background-color: white;
+	color: white;
+}
+@media (max-width: 600px) {
+	body {
+		padding: 10px;
+	}
+	.inputs input,
+	.actions button {
+		font-size: 0.95rem;
+		padding: 8px;
+	}
+	th,
+	td {
+		min-width: 60px;
+		font-size: 0.85rem;
+	}
+}
+/* Modais com animação fade */
+#loading, #custom-prompt, #custom-alert {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background: rgba(0, 0, 0, 0.85);
+	color: #fff;
+	padding: 20px 30px;
+	border-radius: 10px;
+	font-weight: bold;
+	z-index: 10000;
+	text-align: center;
+	box-shadow: 0 0 15px rgba(0, 0, 0, 0.4);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.3s ease;
+	max-width: 90vw;
+	width: 320px;
+	user-select: none;
+}
+#loading.show, #custom-prompt.show, #custom-alert.show {
+	opacity: 1;
+	pointer-events: auto;
+	user-select: text;
+}
+#custom-prompt input {
+	padding: 8px;
+	font-size: 16px;
+	width: 60%;
+	margin-bottom: 15px;
+	text-align: center;
+	user-select: text;
+}
+#custom-prompt button, #custom-alert button {
+	padding: 10px 20px;
+	font-size: 16px;
+	border: none;
+	background-color: #4caf50;
+	color: white;
+	border-radius: 5px;
+	cursor: pointer;
+	user-select: none;
+}
+#loading, #custom-prompt, #custom-alert {
+	display: none;
+	position: fixed; top: 50%; left: 50%;
+	transform: translate(-50%, -50%);
+	background: white; border: 1px solid #ccc; padding: 20px; z-index: 9999;
+}
+#loading.show, #custom-prompt.show, #custom-alert.show { 
+	display: block;
+}
+#custom-prompt input {
+	margin-bottom: 10px; width: 100%;
+}
