@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Agenda Semanal</title>
+		<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+		<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+		<link rel="stylesheet" href="https://duckexza.github.io/agenda/css/style.css" />
+	</head>
+	<body>
+		<h2>Agenda Semanal</h2>
+		<div class="container">
+			<div class="inputs actions">
+			<label>Twitch:
+				<input type="text" id="twitch" oninput="this.value = this.value.toLowerCase()" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+			</label>
+			<button id="btnCarregar"><i class="fas fa-download"></i> Carregar Agenda</button>
+			<button id="btnLimpar"><i class="fas fa-eraser"></i> Limpar Agenda</button>
+			<button id="btnSalvar"><i class="fas fa-save"></i> Salvar</button>
+			</div>
+		</div>
+		
+		<div class="table-wrapper">
+			<table id="agenda">
+			<thead>
+				<tr>
+				<th>Hora</th>
+				<th>Seg</th>
+				<th>Ter</th>
+				<th>Qua</th>
+				<th>Qui</th>
+				<th>Sex</th>
+				<th>Sáb</th>
+				</tr>
+			</thead>
+			<tbody></tbody>
+			</table>
+		</div>
+		<div id="loading">Processando...</div>
+		
+		<div id="custom-prompt" role="dialog" aria-modal="true" aria-labelledby="prompt-message" tabindex="-1">
+			<div id="prompt-message" style="margin-bottom:15px;"></div>
+			<input id="prompt-input" type="password" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+			<button id="prompt-ok-btn">Confirmar</button>
+		</div>
+		
+		<div id="custom-alert" role="alertdialog" aria-modal="true" aria-labelledby="alert-message" tabindex="-1">
+			<div id="alert-message" style="margin-bottom:15px;"></div>
+			<button id="alert-close-btn">Fechar</button>
+		</div>
+	
+		<script>
+			// Firebase config e inicialização
+			const firebaseConfig = {
+				apiKey: "AIzaSyC8muc6OX32PuZNzklRIppbhBVwaOS80L0",
+				authDomain: "gods-f165b.firebaseapp.com",
+				projectId: "gods-f165b",
+				storageBucket: "gods-f165b.appspot.com",
+				messagingSenderId: "48248280273",
+				appId: "1:48248280273:web:29f140663292421ac2a1f0",
+			};
+			firebase.initializeApp(firebaseConfig);
+			const db = firebase.firestore();
+		
+			const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+			const tbody = document.querySelector("#agenda tbody");
+			const twitchInput = document.getElementById("twitch");
+		
+			// Criar linhas da tabela (10h às 23h)
+			for (let h = 10; h <= 23; h++) {
+				let tr = "<tr><th>" + h + ":00</th>";
+				dias.forEach(d => tr += `<td data-dia="${d}" data-hora="${h}:00" class="bloqueado"></td>`);
+				tr += "</tr>";
+				tbody.insertAdjacentHTML("beforeend", tr);
+			}
+		
+			// Delegate clique na tabela para toggle de classes verde/vermelho
+			tbody.addEventListener("click", e => {
+				if (e.target.tagName === "TD") {
+					let td = e.target;
+					if (td.classList.contains("verde")) {
+					td.classList.replace("verde", "vermelho");
+					} else if (td.classList.contains("vermelho")) {
+					td.classList.remove("vermelho");
+					} else {
+					td.classList.add("verde");
+					}
+				}
+			});
+		
+			// Modais
+			const loading = document.getElementById("loading");
+			const promptModal = document.getElementById("custom-prompt");
+			const promptMessage = document.getElementById("prompt-message");
+			const promptInput = document.getElementById("prompt-input");
+			const promptOkBtn = document.getElementById("prompt-ok-btn");
+			const alertModal = document.getElementById("custom-alert");
+			const alertMessage = document.getElementById("alert-message");
+			const alertCloseBtn = document.getElementById("alert-close-btn");
+		
+			function showLoading(msg = "Processando...") {
+				loading.textContent = msg;
+				loading.classList.add("show");
+			}
+			function hideLoading() {
+				loading.classList.remove("show");
+			}
+		
+			function showAlert(msg) {
+				alertMessage.textContent = msg;
+				alertModal.classList.add("show");
+				alertCloseBtn.focus();
+			}
+			function hideAlert() {
+				alertModal.classList.remove("show");
+				twitchInput.focus();
+			}
+			alertCloseBtn.onclick = hideAlert;
+			alertModal.addEventListener("keydown", e => {
+				if (["Enter", "Escape"].includes(e.key)) {
+					e.preventDefault();
+					hideAlert();
+				}
+			});
+		
+			// Prompt simplificado usando Promise
+			function showPrompt(msg) {
+				return new Promise(resolve => {
+					promptMessage.textContent = msg;
+					promptInput.value = "";
+					promptModal.classList.add("show");
+					promptInput.focus();
+			
+					function done(value) {
+					promptModal.classList.remove("show");
+					promptOkBtn.removeEventListener("click", onOk);
+					promptInput.removeEventListener("keydown", onKey);
+					resolve(value);
+					twitchInput.focus();
+					}
+					function onOk() {
+					done(promptInput.value.trim());
+					}
+					function onKey(e) {
+					if (e.key === "Enter") onOk();
+					else if (e.key === "Escape") done("");
+					}
+					promptOkBtn.addEventListener("click", onOk);
+					promptInput.addEventListener("keydown", onKey);
+				});
+			}
+		
+			// Limpar agenda: remover verde/vermelho
+			function limparAgenda() {
+				tbody.querySelectorAll("td").forEach(td => td.classList.remove("verde", "vermelho"));
+			}
+		
+			// Validar login + carregar agenda
+			async function validarLogin() {
+				const twitch = twitchInput.value.trim();
+				if (!twitch) return showAlert("Informe o twitch.");
+				showLoading("Validando login...");
+				try {
+					const doc = await db.collection("agendas").doc(twitch).get();
+					hideLoading();
+					if (!doc.exists) return showAlert("Twitch não encontrada.");
+					twitchInput.disabled = true;
+					carregarAgenda(twitch);
+				} catch {
+					hideLoading();
+					showAlert("Erro ao validar login.");
+				}
+			}
+		
+			// Carregar agenda da Firestore
+			async function carregarAgenda(twitch) {
+				showLoading("Carregando agenda...");
+				limparAgenda();
+				try {
+					const doc = await db.collection("agendas").doc(twitch).get();
+					if (!doc.exists) {
+						hideLoading();
+						return showAlert("Agenda vazia.");
+					}
+					const agenda = doc.data();
+					tbody.querySelectorAll("td").forEach(td => {
+						const d = td.dataset.dia;
+						const h = td.dataset.hora;
+						if (agenda[d] && agenda[d][h]) {
+							td.classList.add(agenda[d][h]);
+							td.classList.remove("bloqueado");
+						}
+					});
+				} catch {
+					showAlert("Erro ao carregar agenda.");
+				}
+				hideLoading();
+			}
+		
+			// Salvar agenda
+			async function salvarAgenda() {
+				const twitch = twitchInput.value.trim();
+				if (!twitch) return showAlert("Informe o twitch.");
+				const codigo = await showPrompt("Digite o código de segurança:");
+				if (!codigo) return showAlert("Código é obrigatório.");
+				showLoading("Salvando agenda...");
+				try {
+					const agenda = {};
+					tbody.querySelectorAll("td").forEach(td => {
+					const d = td.dataset.dia;
+					const h = td.dataset.hora;
+					if (!agenda[d]) agenda[d] = {};
+					agenda[d][h] = td.classList.contains("verde") ? "verde" : "vermelho";
+					});
+					agenda.codigo = codigo;
+					await db.collection("agendas").doc(twitch).set(agenda);
+					showAlert("Agenda salva com sucesso!");
+				} catch {
+					showAlert("Erro ao salvar agenda.");
+				}
+				hideLoading();
+			}
+		
+			// Eventos dos botões
+			document.getElementById("btnCarregar").onclick = validarLogin;
+			document.getElementById("btnLimpar").onclick = limparAgenda;
+			document.getElementById("btnSalvar").onclick = salvarAgenda;
+		
+			// Enter no input twitch para validar
+			twitchInput.addEventListener("keydown", e => {
+				if (e.key === "Enter") {
+					e.preventDefault();
+					validarLogin();
+				}
+			});
+		</script>
+	</body>
+</html>
