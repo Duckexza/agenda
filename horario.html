@@ -1,284 +1,436 @@
 <!DOCTYPE html>
 <html lang="pt">
-	<head>
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>Agenda Semanal</title>
-		<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-		<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"	/>
-		<style>
-			* { box-sizing: border-box; }
-			body { margin: 0; font-family: Arial, sans-serif; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
-			h2 { margin: 0; text-align: center; }
-			.container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; width: 100%; max-width: 900px; }
-			.inputs { display: flex; flex-direction: column; gap: 10px; min-width: 250px; flex: 1; }
-			.inputs label { font-weight: bold; display: flex; flex-direction: column; }
-			.inputs input { padding: 6px; font-size: 1rem; width: 100%; }
-			.actions { display: flex; flex-direction: column; gap: 10px; flex: 1; justify-content: flex-start; min-width: 180px; }
-			.actions button {  padding: 10px; font-size: 1rem; cursor: pointer; }
-			.table-wrapper { overflow-x: auto; width: 100%; max-width: 1000px; }
-			table { width: 100%; max-width: 100%; border-collapse: collapse; border: 1px solid black; text-align: center; table-layout: fixed; word-wrap: break-word; }
-			th, td { border: 1px solid black; padding: 5px; min-width: 80px; overflow: hidden; text-overflow: ellipsis; }
-			td.bloqueado { pointer-events: none; cursor: no-drop; }
-			.verde { background-color: green; color: white; }
-			.vermelho { background-color: white; color: white; }
-			@media (max-width: 600px) { body { padding: 10px; }
-			.inputs input, .actions button { font-size: 0.95rem; padding: 8px; }
-			th, td { min-width: 60px; font-size: 0.85rem; } }
-			.tooltip-container { position: relative; display: inline-block; }
-			.tooltip-container .tooltip-text { visibility: hidden; width: 250px; background-color: #333; color: #fff; text-align: left; border-radius: 5px; padding: 8px; position: absolute; z-index: 1; bottom: 125%; /* posição acima do input */ left: 50%; margin-left: -125px; opacity: 0; transition: opacity 0.3s; font-size: 13px; }
-			.tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
-			.tooltip-text::after { content: ""; position: absolute; top: 100%; /* seta abaixo do balão */ left: 50%; margin-left: -5px; border-width: 5px;  border-style: solid; border-color: #333 transparent transparent transparent; }
-		</style>
-	</head>
-	<body>
-		<h2>Agenda Semanal</h2>
-		<div class="container">
-			<div class="inputs">
-				<label>Twitch: <input type="text" id="twitch" oninput="this.value = this.value.toLowerCase()"></label>
-				<label>Código: <input type="password" id="codigo"></label>
-				<label>Telefone atual: <input type="text" id="telefone" disabled></label>
-			</div>
-			<div class="actions">
-				<button onclick="validarLogin()"><i class="fas fa-download"></i>  Carregar Agenda</button>
-				<button onclick="limparAgenda()"><i class="fas fa-eraser"></i>  Limpar Agenda</button>
-				<button onclick="salvarAgenda()"><i class="fas fa-save"></i>  Salvar</button>
-			</div>
-		</div>
-		<div class="table-wrapper">
-			<table id="agenda">
-				<thead>
-				<tr>
-					<th>Hora</th>
-					<th>Seg</th>
-					<th>Ter</th>
-					<th>Qua</th>
-					<th>Qui</th>
-					<th>Sex</th>
-					<th>Sáb</th>
-				</tr>
-				</thead>
-				<tbody></tbody>
-			</table>
-		</div>
-		<div class="container">
-			<div class="inputs">
-				<label>Nova Twitch: <input type="text" id="novaTwitch" oninput="this.value = this.value.toLowerCase()"></label>
-				<div class="tooltip-container">
-					<label>Novo telefone: <input type="text" id="novoTelefone" placeholder="55 11 91234-5678"></label>
-					<div class="tooltip-text">Digite o número com o código do país, DDD e telefone. Ex: 55 11 91234-5678</div>
-				</div>
-			</div>
-			<div class="actions">
-				<button onclick="renomearTwitch()"><i class="fas fa-user-edit"></i>  Renomear Twitch</button>
-				<button onclick="atualizarTelefone()"><i class="fa-solid fa-phone-volume"></i>  Atualizar Telefone</button>
-			</div>
-		</div>
-		<div id="loading" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(0,0,0,0.7); color:#fff; padding:20px 30px; border-radius:10px; font-weight:bold; z-index:9999;">Processando...
-		</div>
-		<script>
-			const telefoneInput = document.getElementById('novoTelefone');
-			telefoneInput.addEventListener('input', function () {
-				// Remove tudo que não for número
-				this.value = this.value.replace(/\D/g, '');
-			});
-			// Firebase config
-			const firebaseConfig = {
-			apiKey: "AIzaSyC8muc6OX32PuZNzklRIppbhBVwaOS80L0",
-			authDomain: "gods-f165b.firebaseapp.com",
-			projectId: "gods-f165b",
-			storageBucket: "gods-f165b.firebasestorage.app",
-			messagingSenderId: "48248280273",
-			appId: "1:48248280273:web:29f140663292421ac2a1f0"
-			};
-			firebase.initializeApp(firebaseConfig);
-			const db = firebase.firestore();
-			
-			const dias = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-			const tbody = document.querySelector('#agenda tbody');
-			
-			for (let h = 10; h <= 23; h++) {
-			const tr = document.createElement('tr');
-			const th = document.createElement('th');
-			th.textContent = h + ":00";
-			tr.appendChild(th);
-			
-			for (let d = 0; d < dias.length; d++) {
-				const td = document.createElement('td');
-				td.dataset.dia = dias[d];
-				td.dataset.hora = h + ":00";
-				td.classList.add('bloqueado');
-				td.addEventListener('click', () => {
-				if (td.classList.contains('verde')) {
-					td.classList.remove('verde');
-					td.classList.add('vermelho');
-				} else if (td.classList.contains('vermelho')) {
-					td.classList.remove('vermelho');
-					td.classList.add('verde');
-				} else {
-					td.classList.add('verde');
-				}
-				});
-				tr.appendChild(td);
-			}
-			tbody.appendChild(tr);
-			}
-			
-			function mostrarLoading(msg = "Processando...") {
-			const loading = document.getElementById('loading');
-			loading.textContent = msg;
-			loading.style.display = 'block';
-			}
-			
-			function esconderLoading() {
-			document.getElementById('loading').style.display = 'none';
-			}
-			
-			const getInputValue = id => document.getElementById(id).value.trim().toLowerCase();
-			const setInputValue = (id, val) => document.getElementById(id).value = val;
-			const disableInput = (id, state = true) => document.getElementById(id).disabled = state;
-			
-			function limparAgenda() {
-			document.querySelectorAll('td').forEach(td => {
-				td.classList.remove('verde', 'vermelho');
-			});
-			}
-			
-			async function validarLogin() {
-			const twitch = getInputValue('twitch');
-			const codigo = getInputValue('codigo');
-			if (!twitch || !codigo) return alert("Informe o twitch e o código.");
-			
-			mostrarLoading("Validando login...");
-			try {
-				const doc = await db.collection("usuarios").doc(twitch).get();
-				if (!doc.exists || doc.data().codigo !== codigo) return alert("twitch ou código incorretos.");
-			
-				setInputValue('telefone', doc.data().telefone || '');
-				disableInput('twitch');
-				disableInput('codigo');
-				disableInput('telefone');
-				await carregarAgenda(twitch);
-			} catch (e) {
-				console.error("Erro ao validar login:", e);
-				alert("Erro ao validar login.");
-			} finally {
-				esconderLoading();
-			}
-			}
-			
-			async function carregarAgenda(twitch) {
-			mostrarLoading("Carregando agenda...");
-			try {
-				document.querySelectorAll('td').forEach(td => td.classList.remove('bloqueado'));
-				const doc = await db.collection("agendas").doc(twitch).get();
-				if (!doc.exists) return alert("Agenda vazia.");
-			
-				const agenda = doc.data();
-				document.querySelectorAll('td').forEach(td => {
-				td.classList.remove('verde', 'vermelho');
-				const dia = td.dataset.dia;
-				const hora = td.dataset.hora;
-				if (agenda[dia] && agenda[dia][hora]) {
-					td.classList.add(agenda[dia][hora]);
-				}
-				});
-			} catch (e) {
-				console.error("Erro ao carregar agenda:", e);
-				alert("Erro ao carregar agenda.");
-			} finally {
-				esconderLoading();
-			}
-			}
-			
-			async function salvarAgenda() {
-  const twitch = getInputValue('twitch');
-  const codigo = getInputValue('codigo');
-  if (!twitch || !codigo) return alert("Informe o twitch e o código.");
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agenda Semanal - Tudo em JS</title>
+</head>
+<body>
+  <div id="app"></div>
 
-  mostrarLoading("Salvando agenda...");
-  try {
-    const agenda = { codigo }; // Inclui o código aqui
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <link rel="stylesheet" href="https://duckexza.github.io/agenda/style.css" />
+  <script>
+    // Configuração Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyC8muc6OX32PuZNzklRIppbhBVwaOS80L0",
+      authDomain: "gods-f165b.firebaseapp.com",
+      projectId: "gods-f165b",
+      storageBucket: "gods-f165b.appspot.com",
+      messagingSenderId: "48248280273",
+      appId: "1:48248280273:web:29f140663292421ac2a1f0",
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-    document.querySelectorAll('td').forEach(td => {
-      const dia = td.dataset.dia;
-      const hora = td.dataset.hora;
-      let status = 'vermelho';
-      if (td.classList.contains('verde')) status = 'verde';
-      if (!agenda[dia]) agenda[dia] = {};
-      agenda[dia][hora] = status;
-    });
+    // Criar a estrutura HTML e CSS via JS
+    (function () {
+      const app = document.getElementById("app");
 
-    await db.collection("agendas").doc(twitch).set(agenda);
-    alert("Agenda salva com sucesso!");
-  } catch (e) {
-    console.error("Erro ao salvar agenda:", e);
-    alert("Erro ao salvar agenda.");
-  } finally {
-    esconderLoading();
-  }
-}
-			
-			async function atualizarTelefone() {
-			const twitch = getInputValue('twitch');
-			const novoTelefone = getInputValue('novoTelefone');
-			const codigo = getInputValue('codigo');
-			
-			if (!twitch || !codigo || !novoTelefone) return alert("Preencha o novo telefone.");
-			
-			mostrarLoading("Atualizando telefone...");
-			try {
-				const doc = await db.collection("usuarios").doc(twitch).get();
-				if (!doc.exists || doc.data().codigo !== codigo) return alert("Código incorreto.");
-			
-				await db.collection("usuarios").doc(twitch).update({ telefone: novoTelefone });
-				setInputValue('telefone', novoTelefone);
-				setInputValue('novoTelefone', '');
-				alert("Telefone atualizado com sucesso!");
-			} catch (e) {
-				console.error("Erro ao atualizar telefone:", e);
-				alert("Erro ao atualizar telefone.");
-			} finally {
-				esconderLoading();
-			}
-			}
-			
-			async function renomearTwitch() {
-			const twitchAntiga = getInputValue('twitch');
-			const novaTwitch = getInputValue('novaTwitch');
-			const codigo = getInputValue('codigo');
-			if (!twitchAntiga || !novaTwitch || !codigo) return alert("Preencha o novo nome da twitch.");
-			
-			mostrarLoading("Renomeando twitch...");
-			try {
-				const docUsuario = await db.collection("usuarios").doc(twitchAntiga).get();
-				if (!docUsuario.exists || docUsuario.data().codigo !== codigo) return alert("twitch ou código incorretos.");
-			
-				const existeNova = await db.collection("usuarios").doc(novaTwitch).get();
-				if (existeNova.exists) return alert("Nome da nova twitch já está em uso.");
-			
-				await db.collection("usuarios").doc(novaTwitch).set(docUsuario.data());
-				const docAgenda = await db.collection("agendas").doc(twitchAntiga).get();
-				if (docAgenda.exists) {
-				await db.collection("agendas").doc(novaTwitch).set(docAgenda.data());
-				}
-				await db.collection("usuarios").doc(twitchAntiga).delete();
-				await db.collection("agendas").doc(twitchAntiga).delete();
-			
-				setInputValue('twitch', novaTwitch);
-				setInputValue('novaTwitch', '');
-				setInputValue('telefone', docUsuario.data().telefone || '');
-				disableInput('telefone', false);
-				await carregarAgenda(novaTwitch);
-				alert("Renomeado com sucesso!");
-			} catch (error) {
-				console.error("Erro ao renomear:", error);
-				alert("Erro ao renomear. Verifique o console.");
-			} finally {
-				esconderLoading();
-			}
-			}
-		</script>
-	</body>
+      // Adiciona estilo global
+
+      // Criar título
+      const h2 = document.createElement("h2");
+      h2.textContent = "Agenda Semanal";
+      app.appendChild(h2);
+
+      // Container inputs e botões
+      const container = document.createElement("div");
+      container.className = "container";
+
+      // Inputs twitch
+      const inputsDiv = document.createElement("div");
+      inputsDiv.className = "inputs actions";
+
+      const labelTwitch = document.createElement("label");
+      labelTwitch.textContent = "Twitch:";
+
+      const twitchInput = document.createElement("input");
+      twitchInput.type = "text";
+      twitchInput.id = "twitch";
+      twitchInput.autocomplete = "off";
+      twitchInput.autocorrect = "off";
+      twitchInput.autocapitalize = "off";
+      twitchInput.spellcheck = false;
+      twitchInput.style.textTransform = "lowercase";
+
+      // Forçar lowercase no input
+      twitchInput.addEventListener("input", () => {
+        twitchInput.value = twitchInput.value.toLowerCase();
+      });
+
+      labelTwitch.appendChild(twitchInput);
+      inputsDiv.appendChild(labelTwitch);
+
+      // Botões
+      const btnCarregar = document.createElement("button");
+      btnCarregar.innerHTML = '<i class="fas fa-download"></i> Carregar Agenda';
+      btnCarregar.style.fontWeight = "bold";
+
+      const btnLimpar = document.createElement("button");
+      btnLimpar.innerHTML = '<i class="fas fa-eraser"></i> Limpar Agenda';
+      btnLimpar.style.fontWeight = "bold";
+
+      const btnSalvar = document.createElement("button");
+      btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar';
+      btnSalvar.style.fontWeight = "bold";
+
+      inputsDiv.appendChild(btnCarregar);
+      inputsDiv.appendChild(btnLimpar);
+      inputsDiv.appendChild(btnSalvar);
+
+      container.appendChild(inputsDiv);
+      app.appendChild(container);
+
+      // Wrapper da tabela
+      const tableWrapper = document.createElement("div");
+      tableWrapper.className = "table-wrapper";
+
+      // Criar tabela
+      const table = document.createElement("table");
+      table.id = "agenda";
+
+      // Thead
+      const thead = document.createElement("thead");
+      const trHead = document.createElement("tr");
+
+      const thHora = document.createElement("th");
+      thHora.textContent = "Hora";
+      trHead.appendChild(thHora);
+
+      const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+      dias.forEach((dia) => {
+        const th = document.createElement("th");
+        th.textContent = dia;
+        trHead.appendChild(th);
+      });
+      thead.appendChild(trHead);
+      table.appendChild(thead);
+
+      // Tbody
+      const tbody = document.createElement("tbody");
+      table.appendChild(tbody);
+      tableWrapper.appendChild(table);
+      app.appendChild(tableWrapper);
+
+      // Criar linhas e células da tabela
+      for (let h = 10; h <= 23; h++) {
+        const tr = document.createElement("tr");
+        const th = document.createElement("th");
+        th.textContent = h + ":00";
+        tr.appendChild(th);
+
+        dias.forEach((dia) => {
+          const td = document.createElement("td");
+          td.dataset.dia = dia;
+          td.dataset.hora = h + ":00";
+          td.classList.add("bloqueado");
+
+          td.addEventListener("click", () => {
+            if (td.classList.contains("verde")) {
+              td.classList.remove("verde");
+              td.classList.add("vermelho");
+            } else if (td.classList.contains("vermelho")) {
+              td.classList.remove("vermelho");
+              td.classList.add("verde");
+            } else {
+              td.classList.add("verde");
+            }
+          });
+
+          tr.appendChild(td);
+        });
+
+        tbody.appendChild(tr);
+      }
+
+      // Modais criados via JS
+
+      // Loading modal
+      const loadingModal = document.createElement("div");
+      loadingModal.id = "loading";
+      loadingModal.className = "modal";
+      loadingModal.textContent = "Processando...";
+      app.appendChild(loadingModal);
+
+      // Prompt modal
+      const promptModal = document.createElement("div");
+      promptModal.id = "custom-prompt";
+      promptModal.className = "modal";
+      promptModal.setAttribute("role", "dialog");
+      promptModal.setAttribute("aria-modal", "true");
+      promptModal.setAttribute("tabindex", "-1");
+
+      const promptMessage = document.createElement("div");
+      promptMessage.id = "prompt-message";
+      promptMessage.style.marginBottom = "15px";
+      promptModal.appendChild(promptMessage);
+
+      const promptInput = document.createElement("input");
+      promptInput.id = "prompt-input";
+      promptInput.type = "text";
+      promptInput.autocomplete = "off";
+      promptInput.autocorrect = "off";
+      promptInput.autocapitalize = "off";
+      promptInput.spellcheck = false;
+      promptModal.appendChild(promptInput);
+
+      const promptOkBtn = document.createElement("button");
+      promptOkBtn.id = "prompt-ok-btn";
+      promptOkBtn.textContent = "Confirmar";
+      promptModal.appendChild(promptOkBtn);
+
+      app.appendChild(promptModal);
+
+      // Alert modal
+      const alertModal = document.createElement("div");
+      alertModal.id = "custom-alert";
+      alertModal.className = "modal";
+      alertModal.setAttribute("role", "alertdialog");
+      alertModal.setAttribute("aria-modal", "true");
+      alertModal.setAttribute("tabindex", "-1");
+
+      const alertMessage = document.createElement("div");
+      alertMessage.id = "alert-message";
+      alertMessage.style.marginBottom = "15px";
+      alertModal.appendChild(alertMessage);
+
+      const alertOkBtn = document.createElement("button");
+      alertOkBtn.id = "alert-ok-btn";
+      alertOkBtn.textContent = "OK";
+      alertModal.appendChild(alertOkBtn);
+
+      app.appendChild(alertModal);
+
+      // Funções utilitárias
+
+      // Mostrar loading
+      function showLoading() {
+        loadingModal.classList.add("show");
+      }
+      function hideLoading() {
+        loadingModal.classList.remove("show");
+      }
+
+      // Prompt customizado
+      function customPrompt(message, callback) {
+        promptMessage.textContent = message;
+        promptInput.value = "";
+        promptModal.classList.add("show");
+        promptInput.focus();
+
+        function confirm() {
+          const val = promptInput.value.trim();
+          promptModal.classList.remove("show");
+          callback(val);
+          removeListeners();
+          twitchInput.focus();
+        }
+
+        function onKey(e) {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            confirm();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            promptModal.classList.remove("show");
+            removeListeners();
+            twitchInput.focus();
+          }
+        }
+
+        function removeListeners() {
+          promptOkBtn.removeEventListener("click", confirm);
+          promptInput.removeEventListener("keydown", onKey);
+        }
+
+        promptOkBtn.addEventListener("click", confirm);
+        promptInput.addEventListener("keydown", onKey);
+      }
+
+      // Alert customizado
+      function customAlert(message, callback) {
+        alertMessage.textContent = message;
+        alertModal.classList.add("show");
+
+        function confirm() {
+          alertModal.classList.remove("show");
+          if (callback) callback();
+          removeListeners();
+          twitchInput.focus();
+        }
+
+        function onKey(e) {
+          if (e.key === "Enter" || e.key === "Escape") {
+            e.preventDefault();
+            confirm();
+          }
+        }
+
+        function removeListeners() {
+          alertOkBtn.removeEventListener("click", confirm);
+          alertModal.removeEventListener("keydown", onKey);
+        }
+
+        alertOkBtn.addEventListener("click", confirm);
+        alertModal.addEventListener("keydown", onKey);
+        alertModal.focus();
+      }
+
+      // Função para limpar tabela (deixa tudo bloqueado)
+      function limparTabela() {
+        const tds = table.querySelectorAll("td");
+        tds.forEach((td) => {
+          td.classList.remove("verde", "vermelho");
+          td.classList.add("bloqueado");
+        });
+      }
+
+      // Função para ativar/desativar células bloqueadas (apenas verde/vermelho clicável)
+      function desbloquearTabela() {
+        const tds = table.querySelectorAll("td");
+        tds.forEach((td) => {
+          td.classList.remove("bloqueado");
+          if (!td.classList.contains("verde") && !td.classList.contains("vermelho")) {
+            td.classList.add("vermelho");
+          }
+        });
+      }
+
+      // Função para carregar agenda do Firestore
+      async function carregarAgenda(nomeTwitch) {
+        showLoading();
+        limparTabela();
+
+        try {
+          const docRef = db.collection("agendas").doc(nomeTwitch);
+          const docSnap = await docRef.get();
+
+          if (!docSnap.exists) {
+            hideLoading();
+            customAlert("Twitch não encontrada.");
+            return;
+          }
+
+          const data = docSnap.data();
+          // Data estrutura: dias com mapa de horas
+
+          // Desbloquear a tabela para setar
+          desbloquearTabela();
+
+          for (const dia in data) {
+            if (typeof data[dia] === "object") {
+              for (const hora in data[dia]) {
+                const valor = data[dia][hora];
+                // Pegar a célula que bate com dia e hora
+                const td = table.querySelector(
+                  `td[data-dia="${dia}"][data-hora="${hora}"]`
+                );
+                if (td) {
+                  if (valor === "verde") {
+                    td.classList.add("verde");
+                    td.classList.remove("vermelho");
+                  } else {
+                    td.classList.add("vermelho");
+                    td.classList.remove("verde");
+                  }
+                  td.classList.remove("bloqueado");
+                }
+              }
+            }
+          }
+        } catch (err) {
+          customAlert("Erro ao carregar a agenda: " + err.message);
+        } finally {
+          hideLoading();
+        }
+      }
+
+      // Função para salvar agenda no Firestore
+      async function salvarAgenda(nomeTwitch) {
+        showLoading();
+
+        // Primeiro mostrar prompt para código de segurança
+        customPrompt("Digite o código de segurança:", async (codigo) => {
+          if (!codigo) {
+            hideLoading();
+            customAlert("Código de segurança obrigatório!");
+            return;
+          }
+
+          // Montar objeto para salvar
+          const agendaData = {};
+
+          // Para cada dia e hora montar estrutura
+          const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+          dias.forEach((dia) => {
+            agendaData[dia] = {};
+            for (let h = 10; h <= 23; h++) {
+              const horaStr = h + ":00";
+              const td = table.querySelector(`td[data-dia="${dia}"][data-hora="${horaStr}"]`);
+              if (td) {
+                if (td.classList.contains("verde")) {
+                  agendaData[dia][horaStr] = "verde";
+                } else {
+                  agendaData[dia][horaStr] = "vermelho";
+                }
+              }
+            }
+          });
+
+          try {
+            // Validação simples do código (por ex., código fixo: "1234")
+            if (codigo !== "1234") {
+              hideLoading();
+              customAlert("Código de segurança inválido!");
+              return;
+            }
+
+            // Salvar no Firestore
+            await db.collection("agendas").doc(nomeTwitch).set(agendaData);
+            hideLoading();
+            customAlert("Agenda salva com sucesso!");
+          } catch (err) {
+            hideLoading();
+            customAlert("Erro ao salvar agenda: " + err.message);
+          }
+        });
+      }
+
+      // Eventos dos botões
+
+      btnCarregar.addEventListener("click", () => {
+        const nome = twitchInput.value.trim().toLowerCase();
+        if (!nome) {
+          customAlert("Por favor, insira um nome Twitch.");
+          return;
+        }
+        carregarAgenda(nome);
+      });
+
+      btnLimpar.addEventListener("click", () => {
+        limparTabela();
+      });
+
+      btnSalvar.addEventListener("click", () => {
+        const nome = twitchInput.value.trim().toLowerCase();
+        if (!nome) {
+          customAlert("Por favor, insira um nome Twitch.");
+          return;
+        }
+        salvarAgenda(nome);
+      });
+
+      // Permitir Enter no input twitch para carregar agenda
+      twitchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          btnCarregar.click();
+        }
+      });
+
+    })();
+  </script>
+</body>
 </html>
