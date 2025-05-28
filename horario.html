@@ -3,16 +3,57 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Agenda Horário</title>
-</head>
-<body>
-  <div id="app"></div>
-
+  <title>Agenda Semanal</title>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="https://duckexza.github.io/agenda/style.css" />
+</head>
+<body>
+  <h2>Agenda Semanal</h2>
+  <div class="container">
+    <div class="inputs actions">
+      <label>Twitch:
+        <input type="text" id="twitch" oninput="this.value = this.value.toLowerCase()" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      </label>
+      <button onclick="validarLogin()"><i class="fas fa-download"></i> Carregar Agenda</button>
+      <button onclick="limparAgenda()"><i class="fas fa-eraser"></i> Limpar Agenda</button>
+      <button onclick="salvarAgenda()"><i class="fas fa-save"></i> Salvar</button>
+    </div>
+  </div>
+
+  <div class="table-wrapper">
+    <table id="agenda">
+      <thead>
+        <tr>
+          <th>Hora</th>
+          <th>Seg</th>
+          <th>Ter</th>
+          <th>Qua</th>
+          <th>Qui</th>
+          <th>Sex</th>
+          <th>Sáb</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- Modais -->
+  <div id="loading">Processando...</div>
+
+  <div id="custom-prompt" role="dialog" aria-modal="true" aria-labelledby="prompt-message" tabindex="-1">
+    <div id="prompt-message" style="margin-bottom:15px;"></div>
+    <input id="prompt-input" type="password" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+    <button id="prompt-ok-btn" onclick="confirmarPrompt()">Confirmar</button>
+  </div>
+
+  <div id="custom-alert" role="alertdialog" aria-modal="true" aria-labelledby="alert-message" tabindex="-1">
+    <div id="alert-message" style="margin-bottom:15px;"></div>
+    <button id="alert-close-btn">Fechar</button>
+  </div>
+
   <script>
-    // Configuração Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyC8muc6OX32PuZNzklRIppbhBVwaOS80L0",
       authDomain: "gods-f165b.firebaseapp.com",
@@ -24,413 +65,201 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Criar a estrutura HTML e CSS via JS
-    (function () {
-      const app = document.getElementById("app");
+    const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+    const tbody = document.querySelector("#agenda tbody");
+    const twitchInput = document.getElementById("twitch");
 
-      // Adiciona estilo global
-
-      // Criar título
-      const h2 = document.createElement("h2");
-      h2.textContent = "Agenda Semanal";
-      app.appendChild(h2);
-
-      // Container inputs e botões
-      const container = document.createElement("div");
-      container.className = "container";
-
-      // Inputs twitch
-      const inputsDiv = document.createElement("div");
-      inputsDiv.className = "inputs actions";
-
-      const labelTwitch = document.createElement("label");
-      labelTwitch.textContent = "Twitch:";
-
-      const twitchInput = document.createElement("input");
-      twitchInput.type = "text";
-      twitchInput.id = "twitch";
-      twitchInput.autocomplete = "off";
-      twitchInput.autocorrect = "off";
-      twitchInput.autocapitalize = "off";
-      twitchInput.spellcheck = false;
-      twitchInput.style.textTransform = "lowercase";
-
-      // Forçar lowercase no input
-      twitchInput.addEventListener("input", () => {
-        twitchInput.value = twitchInput.value.toLowerCase();
-      });
-
-      labelTwitch.appendChild(twitchInput);
-      inputsDiv.appendChild(labelTwitch);
-
-      // Botões
-      const btnCarregar = document.createElement("button");
-      btnCarregar.innerHTML = '<i class="fas fa-download"></i> Carregar Agenda';
-      btnCarregar.style.fontWeight = "bold";
-
-      const btnLimpar = document.createElement("button");
-      btnLimpar.innerHTML = '<i class="fas fa-eraser"></i> Limpar Agenda';
-      btnLimpar.style.fontWeight = "bold";
-
-      const btnSalvar = document.createElement("button");
-      btnSalvar.innerHTML = '<i class="fas fa-save"></i> Salvar';
-      btnSalvar.style.fontWeight = "bold";
-
-      inputsDiv.appendChild(btnCarregar);
-      inputsDiv.appendChild(btnLimpar);
-      inputsDiv.appendChild(btnSalvar);
-
-      container.appendChild(inputsDiv);
-      app.appendChild(container);
-
-      // Wrapper da tabela
-      const tableWrapper = document.createElement("div");
-      tableWrapper.className = "table-wrapper";
-
-      // Criar tabela
-      const table = document.createElement("table");
-      table.id = "agenda";
-
-      // Thead
-      const thead = document.createElement("thead");
-      const trHead = document.createElement("tr");
-
-      const thHora = document.createElement("th");
-      thHora.textContent = "Hora";
-      trHead.appendChild(thHora);
-
-      const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-      dias.forEach((dia) => {
-        const th = document.createElement("th");
-        th.textContent = dia;
-        trHead.appendChild(th);
-      });
-      thead.appendChild(trHead);
-      table.appendChild(thead);
-
-      // Tbody
-      const tbody = document.createElement("tbody");
-      table.appendChild(tbody);
-      tableWrapper.appendChild(table);
-      app.appendChild(tableWrapper);
-
-      // Criar linhas e células da tabela
-      for (let h = 10; h <= 23; h++) {
-        const tr = document.createElement("tr");
-        const th = document.createElement("th");
-        th.textContent = h + ":00";
-        tr.appendChild(th);
-
-        dias.forEach((dia) => {
-          const td = document.createElement("td");
-          td.dataset.dia = dia;
-          td.dataset.hora = h + ":00";
-          td.classList.add("bloqueado");
-
-          td.addEventListener("click", () => {
-            if (td.classList.contains("verde")) {
-              td.classList.remove("verde");
-              td.classList.add("vermelho");
-            } else if (td.classList.contains("vermelho")) {
-              td.classList.remove("vermelho");
-              td.classList.add("verde");
-            } else {
-              td.classList.add("verde");
-            }
-          });
-
-          tr.appendChild(td);
+    // Criar linhas da tabela
+    for (let h = 10; h <= 23; h++) {
+      const tr = document.createElement("tr");
+      const th = document.createElement("th");
+      th.textContent = h + ":00";
+      tr.appendChild(th);
+      for (let d = 0; d < dias.length; d++) {
+        const td = document.createElement("td");
+        td.dataset.dia = dias[d];
+        td.dataset.hora = h + ":00";
+        td.classList.add("bloqueado");
+        td.addEventListener("click", () => {
+          if (td.classList.contains("verde")) {
+            td.classList.remove("verde");
+            td.classList.add("vermelho");
+          } else if (td.classList.contains("vermelho")) {
+            td.classList.remove("vermelho");
+            td.classList.add("verde");
+          } else {
+            td.classList.add("verde");
+          }
         });
-
-        tbody.appendChild(tr);
+        tr.appendChild(td);
       }
+      tbody.appendChild(tr);
+    }
 
-      // Modais criados via JS
+    // Controles modais
+    const loadingModal = document.getElementById("loading");
+    const promptModal = document.getElementById("custom-prompt");
+    const promptMessage = document.getElementById("prompt-message");
+    const promptInput = document.getElementById("prompt-input");
+    const alertModal = document.getElementById("custom-alert");
+    const alertMessage = document.getElementById("alert-message");
+    const alertCloseBtn = document.getElementById("alert-close-btn");
 
-      // Loading modal
-      const loadingModal = document.createElement("div");
-      loadingModal.id = "loading";
-      loadingModal.className = "modal";
-      loadingModal.textContent = "Processando...";
-      app.appendChild(loadingModal);
+    let resolvePrompt;
 
-      // Prompt modal
-      const promptModal = document.createElement("div");
-      promptModal.id = "custom-prompt";
-      promptModal.className = "modal";
-      promptModal.setAttribute("role", "dialog");
-      promptModal.setAttribute("aria-modal", "true");
-      promptModal.setAttribute("tabindex", "-1");
+    function mostrarLoading(msg = "Processando...") {
+      loadingModal.textContent = msg;
+      loadingModal.classList.add("show");
+    }
+    function esconderLoading() {
+      loadingModal.classList.remove("show");
+    }
 
-      const promptMessage = document.createElement("div");
-      promptMessage.id = "prompt-message";
-      promptMessage.style.marginBottom = "15px";
-      promptModal.appendChild(promptMessage);
+    function mostrarAlerta(msg) {
+      alertMessage.textContent = msg;
+      alertModal.classList.add("show");
+      alertCloseBtn.focus();
+    }
+    function esconderAlerta() {
+      alertModal.classList.remove("show");
+      twitchInput.focus();
+    }
 
-      const promptInput = document.createElement("input");
-      promptInput.id = "prompt-input";
-      promptInput.type = "text";
-      promptInput.autocomplete = "off";
-      promptInput.autocorrect = "off";
-      promptInput.autocapitalize = "off";
-      promptInput.spellcheck = false;
-      promptModal.appendChild(promptInput);
-
-      const promptOkBtn = document.createElement("button");
-      promptOkBtn.id = "prompt-ok-btn";
-      promptOkBtn.textContent = "Confirmar";
-      promptModal.appendChild(promptOkBtn);
-
-      app.appendChild(promptModal);
-
-      // Alert modal
-      const alertModal = document.createElement("div");
-      alertModal.id = "custom-alert";
-      alertModal.className = "modal";
-      alertModal.setAttribute("role", "alertdialog");
-      alertModal.setAttribute("aria-modal", "true");
-      alertModal.setAttribute("tabindex", "-1");
-
-      const alertMessage = document.createElement("div");
-      alertMessage.id = "alert-message";
-      alertMessage.style.marginBottom = "15px";
-      alertModal.appendChild(alertMessage);
-
-      const alertOkBtn = document.createElement("button");
-      alertOkBtn.id = "alert-ok-btn";
-      alertOkBtn.textContent = "OK";
-      alertModal.appendChild(alertOkBtn);
-
-      app.appendChild(alertModal);
-
-      // Funções utilitárias
-
-      // Mostrar loading
-      function showLoading() {
-        loadingModal.classList.add("show");
+    // Fechar alerta com botão e com Enter
+    alertCloseBtn.onclick = esconderAlerta;
+    alertModal.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === "Escape") {
+        e.preventDefault();
+        esconderAlerta();
       }
-      function hideLoading() {
-        loadingModal.classList.remove("show");
-      }
+    });
 
-      // Prompt customizado
-      function customPrompt(message, callback) {
-        promptMessage.textContent = message;
+    function mostrarPrompt(msg = "Digite o valor:") {
+      return new Promise((resolve) => {
+        promptMessage.textContent = msg;
         promptInput.value = "";
         promptModal.classList.add("show");
         promptInput.focus();
 
-        function confirm() {
-          const val = promptInput.value.trim();
-          promptModal.classList.remove("show");
-          callback(val);
-          removeListeners();
-          twitchInput.focus();
-        }
-
-        function onKey(e) {
+        function keyHandler(e) {
           if (e.key === "Enter") {
             e.preventDefault();
-            confirm();
-          } else if (e.key === "Escape") {
+            confirmarPrompt();
+          }
+          if (e.key === "Escape") {
             e.preventDefault();
-            promptModal.classList.remove("show");
-            removeListeners();
-            twitchInput.focus();
+            fecharPrompt("");
           }
         }
 
-        function removeListeners() {
-          promptOkBtn.removeEventListener("click", confirm);
-          promptInput.removeEventListener("keydown", onKey);
-        }
-
-        promptOkBtn.addEventListener("click", confirm);
-        promptInput.addEventListener("keydown", onKey);
-      }
-
-      // Alert customizado
-      function customAlert(message, callback) {
-        alertMessage.textContent = message;
-        alertModal.classList.add("show");
-
-        function confirm() {
-          alertModal.classList.remove("show");
-          if (callback) callback();
-          removeListeners();
+        function fecharPrompt(value) {
+          promptModal.classList.remove("show");
+          document.removeEventListener("keydown", keyHandler);
           twitchInput.focus();
+          resolve(value);
         }
 
-        function onKey(e) {
-          if (e.key === "Enter" || e.key === "Escape") {
-            e.preventDefault();
-            confirm();
-          }
-        }
+        window.confirmarPrompt = () => {
+          fecharPrompt(promptInput.value.trim());
+        };
 
-        function removeListeners() {
-          alertOkBtn.removeEventListener("click", confirm);
-          alertModal.removeEventListener("keydown", onKey);
-        }
+        document.addEventListener("keydown", keyHandler);
+      });
+    }
 
-        alertOkBtn.addEventListener("click", confirm);
-        alertModal.addEventListener("keydown", onKey);
-        alertModal.focus();
+    function limparAgenda() {
+      document.querySelectorAll("td").forEach((td) => td.classList.remove("verde", "vermelho"));
+    }
+
+    async function validarLogin() {
+      const twitch = twitchInput.value.trim().toLowerCase();
+      if (!twitch) {
+        mostrarAlerta("Informe o twitch.");
+        return;
       }
-
-      // Função para limpar tabela (deixa tudo bloqueado)
-      function limparTabela() {
-        const tds = table.querySelectorAll("td");
-        tds.forEach((td) => {
-          td.classList.remove("verde", "vermelho");
-          td.classList.add("bloqueado");
-        });
-      }
-
-      // Função para ativar/desativar células bloqueadas (apenas verde/vermelho clicável)
-      function desbloquearTabela() {
-        const tds = table.querySelectorAll("td");
-        tds.forEach((td) => {
-          td.classList.remove("bloqueado");
-          if (!td.classList.contains("verde") && !td.classList.contains("vermelho")) {
-            td.classList.add("vermelho");
-          }
-        });
-      }
-
-      // Função para carregar agenda do Firestore
-      async function carregarAgenda(nomeTwitch) {
-        showLoading();
-        limparTabela();
-
-        try {
-          const docRef = db.collection("agendas").doc(nomeTwitch);
-          const docSnap = await docRef.get();
-
-          if (!docSnap.exists) {
-            hideLoading();
-            customAlert("Twitch não encontrada.");
-            return;
-          }
-
-          const data = docSnap.data();
-          // Data estrutura: dias com mapa de horas
-
-          // Desbloquear a tabela para setar
-          desbloquearTabela();
-
-          for (const dia in data) {
-            if (typeof data[dia] === "object") {
-              for (const hora in data[dia]) {
-                const valor = data[dia][hora];
-                // Pegar a célula que bate com dia e hora
-                const td = table.querySelector(
-                  `td[data-dia="${dia}"][data-hora="${hora}"]`
-                );
-                if (td) {
-                  if (valor === "verde") {
-                    td.classList.add("verde");
-                    td.classList.remove("vermelho");
-                  } else {
-                    td.classList.add("vermelho");
-                    td.classList.remove("verde");
-                  }
-                  td.classList.remove("bloqueado");
-                }
-              }
-            }
-          }
-        } catch (err) {
-          customAlert("Erro ao carregar a agenda: " + err.message);
-        } finally {
-          hideLoading();
-        }
-      }
-
-      // Função para salvar agenda no Firestore
-      async function salvarAgenda(nomeTwitch) {
-        showLoading();
-
-        // Primeiro mostrar prompt para código de segurança
-        customPrompt("Digite o código de segurança:", async (codigo) => {
-          if (!codigo) {
-            hideLoading();
-            customAlert("Código de segurança obrigatório!");
-            return;
-          }
-
-          // Montar objeto para salvar
-          const agendaData = {};
-
-          // Para cada dia e hora montar estrutura
-          const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-          dias.forEach((dia) => {
-            agendaData[dia] = {};
-            for (let h = 10; h <= 23; h++) {
-              const horaStr = h + ":00";
-              const td = table.querySelector(`td[data-dia="${dia}"][data-hora="${horaStr}"]`);
-              if (td) {
-                if (td.classList.contains("verde")) {
-                  agendaData[dia][horaStr] = "verde";
-                } else {
-                  agendaData[dia][horaStr] = "vermelho";
-                }
-              }
-            }
-          });
-
-          try {
-            // Validação simples do código (por ex., código fixo: "1234")
-            if (codigo !== "1234") {
-              hideLoading();
-              customAlert("Código de segurança inválido!");
-              return;
-            }
-
-            // Salvar no Firestore
-            await db.collection("agendas").doc(nomeTwitch).set(agendaData);
-            hideLoading();
-            customAlert("Agenda salva com sucesso!");
-          } catch (err) {
-            hideLoading();
-            customAlert("Erro ao salvar agenda: " + err.message);
-          }
-        });
-      }
-
-      // Eventos dos botões
-
-      btnCarregar.addEventListener("click", () => {
-        const nome = twitchInput.value.trim().toLowerCase();
-        if (!nome) {
-          customAlert("Por favor, insira um nome Twitch.");
+      mostrarLoading("Validando login...");
+      try {
+        const doc = await db.collection("agendas").doc(twitch).get();
+        esconderLoading();
+        if (!doc.exists) {
+          mostrarAlerta("Twitch não encontrada.");
           return;
         }
-        carregarAgenda(nome);
-      });
+        twitchInput.disabled = true;
+        await carregarAgenda(twitch);
+      } catch (e) {
+        esconderLoading();
+        console.error(e);
+        mostrarAlerta("Erro ao validar login.");
+      }
+    }
 
-      btnLimpar.addEventListener("click", () => {
-        limparTabela();
-      });
-
-      btnSalvar.addEventListener("click", () => {
-        const nome = twitchInput.value.trim().toLowerCase();
-        if (!nome) {
-          customAlert("Por favor, insira um nome Twitch.");
+    async function carregarAgenda(twitch) {
+      mostrarLoading("Carregando agenda...");
+      try {
+        document.querySelectorAll("td").forEach((td) => td.classList.remove("bloqueado", "verde", "vermelho"));
+        const doc = await db.collection("agendas").doc(twitch).get();
+        if (!doc.exists) {
+          mostrarAlerta("Agenda vazia.");
           return;
         }
-        salvarAgenda(nome);
-      });
+        const agenda = doc.data();
+        document.querySelectorAll("td").forEach((td) => {
+          const dia = td.dataset.dia;
+          const hora = td.dataset.hora;
+          if (agenda[dia] && agenda[dia][hora]) {
+            td.classList.add(agenda[dia][hora]);
+          }
+        });
+      } catch (e) {
+        console.error(e);
+        mostrarAlerta("Erro ao carregar agenda.");
+      } finally {
+        esconderLoading();
+      }
+    }
 
-      // Permitir Enter no input twitch para carregar agenda
-      twitchInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          btnCarregar.click();
-        }
-      });
+    async function salvarAgenda() {
+      const twitch = twitchInput.value.trim().toLowerCase();
+      if (!twitch) {
+        mostrarAlerta("Informe o twitch.");
+        return;
+      }
+      const codigo = await mostrarPrompt("Digite o código de segurança:");
+      if (!codigo) {
+        mostrarAlerta("Código é obrigatório.");
+        return;
+      }
+      mostrarLoading("Salvando agenda...");
+      try {
+        const agenda = {};
+        document.querySelectorAll("td").forEach((td) => {
+          const dia = td.dataset.dia;
+          const hora = td.dataset.hora;
+          let status = "vermelho";
+          if (td.classList.contains("verde")) status = "verde";
+          if (!agenda[dia]) agenda[dia] = {};
+          agenda[dia][hora] = status;
+        });
+        agenda.codigo = codigo;
+        await db.collection("agendas").doc(twitch).set(agenda);
+        esconderLoading();
+        mostrarAlerta("Agenda salva com sucesso!");
+      } catch (e) {
+        esconderLoading();
+        console.error(e);
+        mostrarAlerta("Erro ao salvar agenda.");
+      }
+    }
 
-    })();
+    // Enter no campo twitch chama validarLogin
+    twitchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        validarLogin();
+      }
+    });
+
   </script>
 </body>
 </html>
