@@ -168,7 +168,6 @@
 					const doc = await db.collection("agendas").doc(twitch).get();
 					hideLoading();
 					if (!doc.exists) return showAlert("Twitch não encontrada.");
-					twitchInput.disabled = true;
 					carregarAgenda(twitch);
 				} catch {
 					hideLoading();
