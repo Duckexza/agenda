@@ -13,8 +13,8 @@
 		<h2>Agenda Semanal</h2>
 		<div class="container">
 			<div class="inputs actions">
-			<label>Twitch:
-				<input type="text" id="twitch" oninput="this.value = this.value.toLowerCase()" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+			<label>usuario:
+				<input type="text" id="usuario" oninput="this.value = this.value.toLowerCase()" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 			</label>
 			<button id="btnCarregar"><i class="fas fa-download"></i> Carregar Agenda</button>
 			<button id="btnLimpar"><i class="fas fa-eraser"></i> Limpar Agenda</button>
@@ -66,7 +66,7 @@
 		
 			const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 			const tbody = document.querySelector("#agenda tbody");
-			const twitchInput = document.getElementById("twitch");
+			const usuarioInput = document.getElementById("usuario");
 		
 			// Criar linhas da tabela (10h às 23h)
 			for (let h = 10; h <= 23; h++) {
@@ -117,7 +117,7 @@
 			}
 			function hideAlert() {
 				alertModal.classList.remove("show");
-				twitchInput.focus();
+				usuarioInput.focus();
 			}
 			alertCloseBtn.onclick = hideAlert;
 			alertModal.addEventListener("keydown", e => {
@@ -140,7 +140,7 @@
 					promptOkBtn.removeEventListener("click", onOk);
 					promptInput.removeEventListener("keydown", onKey);
 					resolve(value);
-					twitchInput.focus();
+					usuarioInput.focus();
 					}
 					function onOk() {
 					done(promptInput.value.trim());
@@ -161,14 +161,14 @@
 		
 			// Validar login + carregar agenda
 			async function validarLogin() {
-				const twitch = twitchInput.value.trim();
-				if (!twitch) return showAlert("Informe a twitch.");
+				const usuario = usuarioInput.value.trim();
+				if (!usuario) return showAlert("Informe seu usuário.");
 				showLoading("Validando login...");
 				try {
-					const doc = await db.collection("agendas").doc(twitch).get();
+					const doc = await db.collection("agendas").doc(usuario).get();
 					hideLoading();
-					if (!doc.exists) return showAlert("Twitch não encontrada.");
-					carregarAgenda(twitch);
+					if (!doc.exists) return showAlert("Usuário não encontrada.");
+					carregarAgenda(usuario);
 				} catch {
 					hideLoading();
 					showAlert("Erro ao validar login.");
@@ -176,11 +176,11 @@
 			}
 		
 			// Carregar agenda da Firestore
-			async function carregarAgenda(twitch) {
+			async function carregarAgenda(usuario) {
 				showLoading("Carregando agenda...");
 				limparAgenda();
 				try {
-					const doc = await db.collection("agendas").doc(twitch).get();
+					const doc = await db.collection("agendas").doc(usuario).get();
 					if (!doc.exists) {
 						hideLoading();
 						return showAlert("Agenda vazia.");
@@ -202,8 +202,8 @@
 		
 			// Salvar agenda
 			async function salvarAgenda() {
-				const twitch = twitchInput.value.trim();
-				if (!twitch) return showAlert("Informe a twitch.");
+				const usuario = usuarioInput.value.trim();
+				if (!usuario) return showAlert("Informe seu usuário.");
 				const codigo = await showPrompt("Digite o código de segurança:");
 				if (!codigo) return showAlert("Código é obrigatório.");
 				showLoading("Salvando agenda...");
@@ -216,7 +216,7 @@
 					agenda[d][h] = td.classList.contains("verde") ? "verde" : "vermelho";
 					});
 					agenda.codigo = codigo;
-					await db.collection("agendas").doc(twitch).set(agenda);
+					await db.collection("agendas").doc(usuario).set(agenda);
 					showAlert("Agenda salva com sucesso!");
 				} catch {
 					showAlert("Erro ao salvar agenda.");
@@ -229,8 +229,8 @@
 			document.getElementById("btnLimpar").onclick = limparAgenda;
 			document.getElementById("btnSalvar").onclick = salvarAgenda;
 		
-			// Enter no input twitch para validar
-			twitchInput.addEventListener("keydown", e => {
+			// Enter no input usuario para validar
+			usuarioInput.addEventListener("keydown", e => {
 				if (e.key === "Enter") {
 					e.preventDefault();
 					validarLogin();
